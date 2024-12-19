@@ -7,33 +7,36 @@ import os
 import shutil
 import sqlite3
 from pathlib import Path
+from dotenv import load_dotenv
 
-APP_ICONS = Path('resources/icons')
-PEN_ICONS = Path('resources/pen_icons')
-COLOR_ICONS = Path('resources/color_icons')
-SAVED_PICTURES = Path('../Saved_Pictures')
-BACKUPS_DIR = Path('resources/temp/backups')
-COMMITTED_BACKUPS_DIR = Path('resources/temp/committed_backups')
-BACKUPS_DB = Path('backups.db')
-COMMITTED_BACKUPS_DB = Path('committed_backups.db')
-TEMP_DIR = Path('resources/temp')
+load_dotenv()
 
-PENCIL_BUCKET_ICON = APP_ICONS.joinpath('PencilBucket_Icon.png')
-ERASER_ICON = APP_ICONS.joinpath('Eraser_Icon.png')
-PALETTE_ICON = APP_ICONS.joinpath('Palette_Icon.png')
-FILE_ICON = APP_ICONS.joinpath('File_Icon.png')
-SMALL_CIRCLE_ICON = APP_ICONS.joinpath('SmallCircle_Icon.png')
-BIG_CIRCLE_ICON = APP_ICONS.joinpath('BigCircle_Icon.png')
-STEP_BACK_ICON = APP_ICONS.joinpath('StepBack_Icon.png')
-STEP_FORWARD_ICON = APP_ICONS.joinpath('StepForward_Icon.png')
-NEW_CANVAS_ICON = APP_ICONS.joinpath('NewCanvas_Icon.png')
-SAVE_IMAGE_ICON = APP_ICONS.joinpath('SaveImage_Icon.png')
-UPLOAD_IMAGE_ICON = APP_ICONS.joinpath('UploadImage_Icon.png')
-SQUARE_ICON = APP_ICONS.joinpath('Square_Icon.png')
-CHALK_ICON = PEN_ICONS.joinpath('Chalk_Icon.png')
-MARKER_ICON = PEN_ICONS.joinpath('Marker_Icon.png')
-PEN_ICON = PEN_ICONS.joinpath('Pen_Icon.png')
-PENCIL_ICON = PEN_ICONS.joinpath('Pencil_Icon.png')
+APP_ICONS = Path(os.environ.get('APP_ICONS'))
+PEN_ICONS = Path(os.environ.get('PEN_ICONS'))
+COLOR_ICONS = Path(os.environ.get('COLOR_ICONS'))
+SAVED_PICTURES = Path(os.environ.get('SAVED_PICTURES'))
+BACKUPS_DIR = Path(os.environ.get('BACKUPS_DIR'))
+COMMITTED_BACKUPS_DIR = Path(os.environ.get('COMMITTED_BACKUPS_DIR'))
+BACKUPS_DB = Path(os.environ.get('BACKUPS_DB'))
+TEMP_DIR = Path(os.environ.get('TEMP_DIR'))
+PEN_SETTINGS_DB = Path(os.environ.get('PEN_SETTINGS_DB'))
+
+PENCIL_BUCKET_ICON = APP_ICONS.joinpath(os.environ.get('PENCIL_BUCKET_ICON'))
+ERASER_ICON = APP_ICONS.joinpath(os.environ.get('ERASER_ICON'))
+PALETTE_ICON = APP_ICONS.joinpath(os.environ.get('PALETTE_ICON'))
+FILE_ICON = APP_ICONS.joinpath(os.environ.get('FILE_ICON'))
+SMALL_CIRCLE_ICON = APP_ICONS.joinpath(os.environ.get('SMALL_CIRCLE_ICON'))
+BIG_CIRCLE_ICON = APP_ICONS.joinpath(os.environ.get('BIG_CIRCLE_ICON'))
+STEP_BACK_ICON = APP_ICONS.joinpath(os.environ.get('STEP_BACK_ICON'))
+STEP_FORWARD_ICON = APP_ICONS.joinpath(os.environ.get('STEP_FORWARD_ICON'))
+NEW_CANVAS_ICON = APP_ICONS.joinpath(os.environ.get('NEW_CANVAS_ICON'))
+SAVE_IMAGE_ICON = APP_ICONS.joinpath(os.environ.get('SAVE_IMAGE_ICON'))
+UPLOAD_IMAGE_ICON = APP_ICONS.joinpath(os.environ.get('UPLOAD_IMAGE_ICON'))
+SQUARE_ICON = APP_ICONS.joinpath(os.environ.get('SQUARE_ICON'))
+CHALK_ICON = PEN_ICONS.joinpath(os.environ.get('CHALK_ICON'))
+MARKER_ICON = PEN_ICONS.joinpath(os.environ.get('MARKER_ICON'))
+PEN_ICON = PEN_ICONS.joinpath(os.environ.get('PEN_ICON'))
+PENCIL_ICON = PEN_ICONS.joinpath(os.environ.get('PENCIL_ICON'))
 
 GlobalIDCounter = 0
 LocalCommittedIDCounter = 0
@@ -254,7 +257,7 @@ class CanvasApp(QMainWindow):
         if self.previousCanvas.toImage() != self.canvasBox.pixmap().toImage():
             self.saveBackup()
             self.previousCanvas = self.canvasBox.pixmap()
-            eraseAllCommittedBackups()
+            eraseCommitted()
             self.stepForwardButton.setEnabled(False)
             self.stepBackButton.setEnabled(True)
 
@@ -264,6 +267,7 @@ class CanvasApp(QMainWindow):
         if self.isEraser:
             self.setEraser()
         self.currentWidthValue.setText(str(self.currentWidth))
+        updatePenSettings('width', self.currentWidth)
 
     def saveBackup(self):
         global GlobalIDCounter
@@ -294,15 +298,12 @@ class CanvasApp(QMainWindow):
         backup_return_time = datetime.datetime.now().strftime('%d_%b_%Y_%H_%M_%S_%f')
         backup_return.save(str(COMMITTED_BACKUPS_DIR.joinpath(f'{backup_return_time}.jpg')), 'jpg', 100)
 
-        con = sqlite3.connect(str(COMMITTED_BACKUPS_DB))
+        con = sqlite3.connect(str(BACKUPS_DB))
         cur = con.cursor()
         sql = f"INSERT INTO com_backups (id, file_name) VALUES ({LocalCommittedIDCounter}, '{backup_return_time}')"
         cur.execute(sql)
         con.commit()
-        cur.connection.close()
 
-        con = sqlite3.connect(str(BACKUPS_DB))
-        cur = con.cursor()
         sql = f"SELECT id, file_name FROM backups WHERE id = (SELECT MAX(id) FROM backups)"
         previous_canvas_name = cur.execute(sql).fetchone()[1]
         previous_canvas = QPixmap(str(BACKUPS_DIR.joinpath(f'{previous_canvas_name}.jpg')))
@@ -333,10 +334,7 @@ class CanvasApp(QMainWindow):
         sql = f"INSERT INTO backups (id, file_name) VALUES ({GlobalIDCounter}, '{backup_time}')"
         cur.execute(sql)
         con.commit()
-        cur.connection.close()
 
-        con = sqlite3.connect(str(COMMITTED_BACKUPS_DB))
-        cur = con.cursor()
         sql = f"SELECT id, file_name FROM com_backups WHERE id = (SELECT MAX(id) FROM com_backups)"
         new_canvas_name = cur.execute(sql).fetchone()[1]
         new_canvas = QPixmap(str(COMMITTED_BACKUPS_DIR.joinpath(f'{new_canvas_name}.jpg')))
@@ -364,6 +362,8 @@ class CanvasApp(QMainWindow):
         self.currentColorValue.setText('(255, 255, 255)')
         if self.latestPaintedPixel is None:
             self.latestPaintedPixel = (0, 0)
+        updatePenSettings('pen_type', 'Ластик')
+        updatePenSettings('color', '(255, 255, 255)')
 
     def makePaleColor(self):
         self.paleCurrentColor = QColor(self.currentColor)
@@ -418,6 +418,10 @@ class PenChangeMenu(QWidget):
         self.main_window.currentColorValue.setText(f'({str(self.main_window.currentColor.red())}, '
                                                    f'{str(self.main_window.currentColor.green())}, '
                                                    f'{str(self.main_window.currentColor.blue())})')
+        updatePenSettings('pen_type', self.main_window.currentPen.name)
+        updatePenSettings('color', f'({str(self.main_window.currentColor.red())}, '
+                                   f'{str(self.main_window.currentColor.green())}, '
+                                   f'{str(self.main_window.currentColor.blue())})')
         self.hide()
 
 
@@ -487,6 +491,9 @@ class ColorChangeMenu(QWidget):
             self.main_window.currentColorValue.setText(f'({str(self.main_window.currentColor.red())}, '
                                                        f'{str(self.main_window.currentColor.green())}, '
                                                        f'{str(self.main_window.currentColor.blue())})')
+            updatePenSettings('color', f'({str(self.main_window.currentColor.red())}, '
+                                       f'{str(self.main_window.currentColor.green())}, '
+                                       f'{str(self.main_window.currentColor.blue())})')
         self.hide()
 
     def confirmColor(self):
@@ -511,6 +518,9 @@ class ColorChangeMenu(QWidget):
             self.main_window.currentColorValue.setText(f'({str(self.main_window.currentColor.red())}, '
                                                        f'{str(self.main_window.currentColor.green())}, '
                                                        f'{str(self.main_window.currentColor.blue())})')
+            updatePenSettings('color', f'({str(self.main_window.currentColor.red())}, '
+                                       f'{str(self.main_window.currentColor.green())}, '
+                                       f'{str(self.main_window.currentColor.blue())})')
         self.hide()
 
 
@@ -566,7 +576,6 @@ class FileWorkMenu(QWidget):
 
     def startOver(self):
         eraseAllBackups()
-        eraseAllCommittedBackups()
         self.main_window.stepBackButton.setEnabled(False)
         self.main_window.stepForwardButton.setEnabled(False)
 
@@ -619,37 +628,69 @@ class FileWorkMenu(QWidget):
 
 
 def createBackupsDatabase():
-    os.remove(str(BACKUPS_DB))
-    connect = sqlite3.connect(str(BACKUPS_DB))
-    cursor = connect.cursor()
+    try:
+        os.remove(str(BACKUPS_DB))
+    except FileNotFoundError:
+        pass
+    con = sqlite3.connect(str(BACKUPS_DB))
+    cursor = con.cursor()
     cursor.execute("""CREATE TABLE IF NOT EXISTS backups (
                           id INTEGER,
                           file_name TEXT
                           )""")
-    cursor.connection.close()
-
-
-def createCommittedBackupsDatabase():
-    os.remove(str(COMMITTED_BACKUPS_DB))
-    connect = sqlite3.connect(str(COMMITTED_BACKUPS_DB))
-    cursor = connect.cursor()
     cursor.execute("""CREATE TABLE IF NOT EXISTS com_backups (
-                              id INTEGER,
-                              file_name TEXT
-                              )""")
+                                  id INTEGER,
+                                  file_name TEXT
+                                  )""")
     cursor.connection.close()
 
 
-def eraseAllCommittedBackups():
-    shutil.rmtree(str(COMMITTED_BACKUPS_DIR))
-    os.mkdir(str(COMMITTED_BACKUPS_DIR))
-    createCommittedBackupsDatabase()
+def createPenSettingsDatabase():
+    try:
+        os.remove(str(PEN_SETTINGS_DB))
+    except FileNotFoundError:
+        pass
+    con = sqlite3.connect(str(PEN_SETTINGS_DB))
+    cursor = con.cursor()
+    cursor.execute("""CREATE TABLE IF NOT EXISTS settings (
+                              pen_type TEXT,
+                              color TEXT,
+                              width INTEGER
+                              )""")
+    cursor.execute("""INSERT INTO settings (pen_type, color, width) VALUES ('Ручка', '(0, 0, 0)', 10)""")
+    con.commit()
+    cursor.connection.close()
+
+
+def updatePenSettings(column, new_value):
+    con = sqlite3.connect(str(PEN_SETTINGS_DB))
+    cursor = con.cursor()
+    if column == 'pen_type':
+        cursor.execute(f"""UPDATE settings SET pen_type = '{new_value}'""")
+    elif column == 'color':
+        cursor.execute(f"""UPDATE settings SET color = '{new_value}'""")
+    elif column == 'width':
+        cursor.execute(f"""UPDATE settings SET width = '{new_value}'""")
+    con.commit()
+    cursor.connection.close()
 
 
 def eraseAllBackups():
     shutil.rmtree(str(BACKUPS_DIR))
     os.mkdir(str(BACKUPS_DIR))
+    shutil.rmtree(str(COMMITTED_BACKUPS_DIR))
+    os.mkdir(str(COMMITTED_BACKUPS_DIR))
     createBackupsDatabase()
+
+
+def eraseCommitted():
+    shutil.rmtree(str(COMMITTED_BACKUPS_DIR))
+    os.mkdir(str(COMMITTED_BACKUPS_DIR))
+    con = sqlite3.connect(str(BACKUPS_DB))
+    cursor = con.cursor()
+    cursor.execute('DELETE FROM com_backups')
+    con.commit()
+    cursor.connection.close()
 
 
 def createTempDir():
@@ -668,7 +709,7 @@ if __name__ == '__main__':
     createSavedPicturesDir()
     createTempDir()
     createBackupsDatabase()
-    createCommittedBackupsDatabase()
+    createPenSettingsDatabase()
     app = QApplication(sys.argv)
     canvasApp_window = CanvasApp()
     canvasApp_window.show()
@@ -677,5 +718,4 @@ if __name__ == '__main__':
     file_window = FileWorkMenu(canvasApp_window)
     report = app.exec()
     eraseAllBackups()
-    eraseAllCommittedBackups()
     sys.exit(report)
